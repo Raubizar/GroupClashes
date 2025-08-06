@@ -9,7 +9,8 @@
                 "${workspaceFolder}\\GroupClashes.sln",
                 "/p:Configuration=2025Debug",
                 "/p:Platform=AnyCPU",
-                "/p:DebugType=portable"
+                "/p:DebugType=portable",
+                "/p:ProgramFiles=C:\\Program Files"
             ],
             "group": {
                 "kind": "build",
@@ -32,7 +33,8 @@
                 "${workspaceFolder}\\GroupClashes.sln",
                 "/p:Configuration=2024Debug",
                 "/p:Platform=AnyCPU",
-                "/p:DebugType=portable"
+                "/p:DebugType=portable",
+                "/p:ProgramFiles=C:\\Program Files"
             ],
             "group": "build",
             "presentation": {
@@ -52,7 +54,8 @@
                 "${workspaceFolder}\\GroupClashes.sln",
                 "/p:Configuration=2023Debug",
                 "/p:Platform=AnyCPU",
-                "/p:DebugType=portable"
+                "/p:DebugType=portable",
+                "/p:ProgramFiles=C:\\Program Files"
             ],
             "group": "build",
             "presentation": {
