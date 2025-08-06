@@ -1,0 +1,88 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build GroupClashes 2025 Debug",
+            "type": "shell",
+            "command": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\MSBuild\\Current\\Bin\\MSBuild.exe",
+            "args": [
+                "${workspaceFolder}\\GroupClashes.sln",
+                "/p:Configuration=2025Debug",
+                "/p:Platform=AnyCPU",
+                "/p:DebugType=portable"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Build GroupClashes 2024 Debug",
+            "type": "shell",
+            "command": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\MSBuild\\Current\\Bin\\MSBuild.exe",
+            "args": [
+                "${workspaceFolder}\\GroupClashes.sln",
+                "/p:Configuration=2024Debug",
+                "/p:Platform=AnyCPU",
+                "/p:DebugType=portable"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Build GroupClashes 2023 Debug",
+            "type": "shell",
+            "command": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\MSBuild\\Current\\Bin\\MSBuild.exe",
+            "args": [
+                "${workspaceFolder}\\GroupClashes.sln",
+                "/p:Configuration=2023Debug",
+                "/p:Platform=AnyCPU",
+                "/p:DebugType=portable"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Clean All Configurations",
+            "type": "shell",
+            "command": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\MSBuild\\Current\\Bin\\MSBuild.exe",
+            "args": [
+                "${workspaceFolder}\\GroupClashes.sln",
+                "/t:Clean",
+                "/p:Configuration=2025Debug",
+                "/p:Platform=AnyCPU"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true
+            },
+            "problemMatcher": "$msCompile"
+        }
+    ]
+}

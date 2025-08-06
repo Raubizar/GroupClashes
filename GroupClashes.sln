@@ -19,6 +19,8 @@ Global
 		2023Release|Any CPU = 2023Release|Any CPU
 		2024Debug|Any CPU = 2024Debug|Any CPU
 		2024Release|Any CPU = 2024Release|Any CPU
+		2025Debug|Any CPU = 2025Debug|Any CPU
+		2025Release|Any CPU = 2025Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{3876FA5D-2B66-4859-A4CD-12F9020B4C29}.2019Debug|Any CPU.ActiveCfg = 2019Debug|Any CPU
@@ -45,6 +47,10 @@ Global
 		{3876FA5D-2B66-4859-A4CD-12F9020B4C29}.2024Debug|Any CPU.Build.0 = 2024Debug|Any CPU
 		{3876FA5D-2B66-4859-A4CD-12F9020B4C29}.2024Release|Any CPU.ActiveCfg = 2024Release|Any CPU
 		{3876FA5D-2B66-4859-A4CD-12F9020B4C29}.2024Release|Any CPU.Build.0 = 2024Release|Any CPU
+		{3876FA5D-2B66-4859-A4CD-12F9020B4C29}.2025Debug|Any CPU.ActiveCfg = 2025Debug|Any CPU
+		{3876FA5D-2B66-4859-A4CD-12F9020B4C29}.2025Debug|Any CPU.Build.0 = 2025Debug|Any CPU
+		{3876FA5D-2B66-4859-A4CD-12F9020B4C29}.2025Release|Any CPU.ActiveCfg = 2025Release|Any CPU
+		{3876FA5D-2B66-4859-A4CD-12F9020B4C29}.2025Release|Any CPU.Build.0 = 2025Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

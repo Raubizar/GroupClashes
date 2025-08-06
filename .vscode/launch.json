@@ -1,0 +1,50 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Attach to Navisworks 2025",
+            "type": "coreclr",
+            "request": "attach",
+            "processName": "roamer.exe",
+            "justMyCode": false,
+            "suppressJITOptimizations": true,
+            "symbolOptions": {
+                "searchPaths": [
+                    "${env:APPDATA}\\Autodesk\\ApplicationPlugins\\GroupClashes.BM42.bundle\\Contents\\2025"
+                ],
+                "searchMicrosoftSymbolServer": false,
+                "searchNuGetOrgSymbolServer": false
+            }
+        },
+        {
+            "name": "Attach to Navisworks 2024",
+            "type": "coreclr",
+            "request": "attach",
+            "processName": "roamer.exe",
+            "justMyCode": false,
+            "suppressJITOptimizations": true,
+            "symbolOptions": {
+                "searchPaths": [
+                    "${env:APPDATA}\\Autodesk\\ApplicationPlugins\\GroupClashes.BM42.bundle\\Contents\\2024"
+                ],
+                "searchMicrosoftSymbolServer": false,
+                "searchNuGetOrgSymbolServer": false
+            }
+        },
+        {
+            "name": "Attach to Navisworks 2023",
+            "type": "coreclr",
+            "request": "attach",
+            "processName": "roamer.exe",
+            "justMyCode": false,
+            "suppressJITOptimizations": true,
+            "symbolOptions": {
+                "searchPaths": [
+                    "${env:APPDATA}\\Autodesk\\ApplicationPlugins\\GroupClashes.BM42.bundle\\Contents\\2023"
+                ],
+                "searchMicrosoftSymbolServer": false,
+                "searchNuGetOrgSymbolServer": false
+            }
+        }
+    ]
+}
