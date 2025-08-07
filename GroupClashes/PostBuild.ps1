@@ -13,6 +13,12 @@ Set-AuthenticodeSignature -FilePath $TargetPath -Certificate $cert -IncludeChain
 
 function CopyToFolder($revitVersion, $addinFolder) {
 
+    # Skip copying if we're already building to the target folder
+    if ($TargetDir -eq $addinFolder) {
+        Write-Host "Skipping copy - already building to target folder: $addinFolder"
+        return
+    }
+    
     if (Test-Path $addinFolder) {
         try {
             # Remove previous versions
@@ -34,10 +40,18 @@ $revitVersion = $Configuration.replace('Debug','').replace('Release','')
 
 # Copy to Addin folder for debug
 $addinMainFolder = ($env:APPDATA + "\Autodesk\ApplicationPlugins\GroupClashes.BM42.bundle\")
-xcopy /Y ($ProjectDir + "PackageContents.xml") $addinMainFolder
 $addinFolder = ($addinMainFolder + "Contents\" + $revitVersion + "\")
-Write-Host "addin folder" + $addinFolder
-CopyToFolder $revitVersion $addinFolder
+
+# Only copy package contents if we're not already building to the target
+if ($TargetDir -ne $addinFolder) {
+    xcopy /Y ($ProjectDir + "PackageContents.xml") $addinMainFolder
+    Write-Host "addin folder" + $addinFolder
+    CopyToFolder $revitVersion $addinFolder
+} else {
+    Write-Host "Skipping addin copy - already building to target folder: $addinFolder"
+    # Still copy PackageContents.xml to the main bundle folder
+    xcopy /Y ($ProjectDir + "PackageContents.xml") $addinMainFolder
+}
 
 
 # Copy to release folder for building the package
