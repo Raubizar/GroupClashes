@@ -146,6 +146,71 @@ Groups clashes by workflow properties assigned to clash results.
 - Converts status enum to string representation
 - Defaults to "Unspecified" for empty/null values
 
+### 📁 File-Based Grouping (`GroupingMode.File`)
+Groups clashes by the source file containing the clashing elements.
+
+**Group Name Format**: `{prefix}{FileName}`
+
+**Examples**:
+- "Architectural_Model.rvt"
+- "MEP_Systems.dwg"
+- "Structure.ifc"
+- "Unnamed File" (if file has no name)
+
+**Implementation Details**:
+- Uses `GetFileAncestor()` to find the root file containing the element
+- Groups elements by their originating model/file
+- Useful for file-specific clash coordination
+
+### 🏷️ Layer-Based Grouping (`GroupingMode.Layer`)
+Groups clashes by layer information from the model elements.
+
+**Group Name Format**: `{prefix}{LayerName}`
+
+**Examples**:
+- "A-WALL-INTR"
+- "M-PIPE-SUPP"
+- "S-BEAM-MAIN"
+- "Unnamed Layer" (if layer has no name)
+
+**Implementation Details**:
+- Extracts layer information from clash elements
+- Groups based on CAD layer or Revit category equivalent
+- Enables discipline-specific coordination workflows
+
+### 🎯 Positional Grouping
+Groups clashes by their position in the clash result sequence.
+
+#### First Element (`GroupingMode.First`)
+**Group Name Format**: `{prefix}{FirstElementName}`
+
+**Examples**:
+- "Wall_Foundation_123" (first element in clash)
+- "Pipe_Supply_456"
+- "Beam_Main_789"
+
+#### Last Element (`GroupingMode.Last`)
+**Group Name Format**: `{prefix}{LastElementName}`
+
+**Examples**:
+- "Duct_Return_321" (last element in clash)
+- "Column_Structural_654"
+- "Equipment_HVAC_987"
+
+#### Last Unique (`GroupingMode.LastUnique`)
+**Group Name Format**: `{prefix}{LastUniqueElementName}`
+
+**Examples**:
+- "Unique_Pipe_001"
+- "Unique_Wall_002"
+- "Unique_Beam_003"
+
+**Implementation Details**:
+- First/Last: Groups by the first or last element involved in each clash
+- LastUnique: Similar to Last but avoids duplicate groups for identical elements
+- Uses element display names with fallback to parent names
+- Useful for element-specific coordination strategies
+
 ## Hierarchical Sub-Grouping
 
 When using the **"Then by"** option, the plugin creates nested group structures:

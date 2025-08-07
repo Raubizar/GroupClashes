@@ -62,6 +62,21 @@ namespace GroupClashes
                 case GroupingMode.Status:
                     clashResultGroups = GroupByProperties(clashResults, groupingMode, initialName);
                     break;
+                case GroupingMode.File:
+                    clashResultGroups = GroupByFile(clashResults, initialName);
+                    break;
+                case GroupingMode.Layer:
+                    clashResultGroups = GroupByLayer(clashResults, initialName);
+                    break;
+                case GroupingMode.First:
+                    clashResultGroups = GroupByFirst(clashResults, initialName);
+                    break;
+                case GroupingMode.Last:
+                    clashResultGroups = GroupByLast(clashResults, initialName);
+                    break;
+                case GroupingMode.LastUnique:
+                    clashResultGroups = GroupByLastUnique(clashResults, initialName);
+                    break;
             }
         }
 
@@ -510,6 +525,270 @@ namespace GroupClashes
 
         #endregion
 
+        #region New Grouping Methods
+
+        /// <summary>
+        /// Groups clashes by the file they come from (similar to ModelA/ModelB but focusing on file path)
+        /// </summary>
+        private static List<ClashResultGroup> GroupByFile(List<ClashResult> results, string initialName)
+        {
+            List<ClashResultGroup> clashResultGroups = new List<ClashResultGroup>();
+
+            foreach (var clashResult in results)
+            {
+                string fileName = "Unknown File";
+                
+                try
+                {
+                    // Get the file ancestor from the clash result
+                    ModelItem fileAncestor = GetFileAncestor(clashResult.CompositeItem1);
+                    if (fileAncestor == null)
+                    {
+                        fileAncestor = GetFileAncestor(clashResult.CompositeItem2);
+                    }
+                    
+                    if (fileAncestor != null && !string.IsNullOrEmpty(fileAncestor.DisplayName))
+                    {
+                        fileName = fileAncestor.DisplayName;
+                    }
+                }
+                catch
+                {
+                    fileName = "Unknown File";
+                }
+
+                string groupName = initialName + fileName;
+                
+                ClashResultGroup existingGroup = clashResultGroups.FirstOrDefault(x => x.DisplayName == groupName);
+                if (existingGroup == null)
+                {
+                    ClashResultGroup newGroup = new ClashResultGroup();
+                    newGroup.DisplayName = groupName;
+                    newGroup.Children.Add(clashResult.CreateCopy());
+                    clashResultGroups.Add(newGroup);
+                }
+                else
+                {
+                    existingGroup.Children.Add(clashResult.CreateCopy());
+                }
+            }
+
+            return clashResultGroups.OrderBy(x => x.DisplayName).ToList();
+        }
+
+        /// <summary>
+        /// Groups clashes by layer information from the clashing elements
+        /// </summary>
+        private static List<ClashResultGroup> GroupByLayer(List<ClashResult> results, string initialName)
+        {
+            List<ClashResultGroup> clashResultGroups = new List<ClashResultGroup>();
+
+            foreach (var clashResult in results)
+            {
+                string layerName = "No Layer";
+                
+                try
+                {
+                    // Try to get layer from properties
+                    var item1 = GetSignificantAncestorOrSelf(clashResult.CompositeItem1);
+                    var item2 = GetSignificantAncestorOrSelf(clashResult.CompositeItem2);
+                    
+                    // Check for layer property in item1
+                    if (item1?.PropertyCategories != null)
+                    {
+                        foreach (var category in item1.PropertyCategories)
+                        {
+                            foreach (var prop in category.Properties)
+                            {
+                                if (prop.DisplayName.ToLower().Contains("layer"))
+                                {
+                                    layerName = prop.Value.ToDisplayString();
+                                    break;
+                                }
+                            }
+                            if (layerName != "No Layer") break;
+                        }
+                    }
+                    
+                    // If still no layer found, check item2
+                    if (layerName == "No Layer" && item2?.PropertyCategories != null)
+                    {
+                        foreach (var category in item2.PropertyCategories)
+                        {
+                            foreach (var prop in category.Properties)
+                            {
+                                if (prop.DisplayName.ToLower().Contains("layer"))
+                                {
+                                    layerName = prop.Value.ToDisplayString();
+                                    break;
+                                }
+                            }
+                            if (layerName != "No Layer") break;
+                        }
+                    }
+                }
+                catch
+                {
+                    layerName = "No Layer";
+                }
+
+                string groupName = initialName + layerName;
+                
+                ClashResultGroup existingGroup = clashResultGroups.FirstOrDefault(x => x.DisplayName == groupName);
+                if (existingGroup == null)
+                {
+                    ClashResultGroup newGroup = new ClashResultGroup();
+                    newGroup.DisplayName = groupName;
+                    newGroup.Children.Add(clashResult.CreateCopy());
+                    clashResultGroups.Add(newGroup);
+                }
+                else
+                {
+                    existingGroup.Children.Add(clashResult.CreateCopy());
+                }
+            }
+
+            return clashResultGroups.OrderBy(x => x.DisplayName).ToList();
+        }
+
+        /// <summary>
+        /// Groups clashes by the first element (Selection A)
+        /// </summary>
+        private static List<ClashResultGroup> GroupByFirst(List<ClashResult> results, string initialName)
+        {
+            List<ClashResultGroup> clashResultGroups = new List<ClashResultGroup>();
+
+            foreach (var clashResult in results)
+            {
+                string elementName = "Empty clash";
+                
+                try
+                {
+                    ModelItem significantItem = GetSignificantAncestorOrSelf(clashResult.CompositeItem1);
+                    
+                    if (significantItem != null)
+                    {
+                        elementName = !string.IsNullOrEmpty(significantItem.DisplayName) ? 
+                            significantItem.DisplayName : "Unnamed Element";
+                    }
+                }
+                catch
+                {
+                    elementName = "Empty clash";
+                }
+
+                string groupName = initialName + elementName;
+                
+                ClashResultGroup existingGroup = clashResultGroups.FirstOrDefault(x => x.DisplayName == groupName);
+                if (existingGroup == null)
+                {
+                    ClashResultGroup newGroup = new ClashResultGroup();
+                    newGroup.DisplayName = groupName;
+                    newGroup.Children.Add(clashResult.CreateCopy());
+                    clashResultGroups.Add(newGroup);
+                }
+                else
+                {
+                    existingGroup.Children.Add(clashResult.CreateCopy());
+                }
+            }
+
+            return clashResultGroups.OrderBy(x => x.DisplayName).ToList();
+        }
+
+        /// <summary>
+        /// Groups clashes by the last element (Selection B)
+        /// </summary>
+        private static List<ClashResultGroup> GroupByLast(List<ClashResult> results, string initialName)
+        {
+            List<ClashResultGroup> clashResultGroups = new List<ClashResultGroup>();
+
+            foreach (var clashResult in results)
+            {
+                string elementName = "Empty clash";
+                
+                try
+                {
+                    ModelItem significantItem = GetSignificantAncestorOrSelf(clashResult.CompositeItem2);
+                    
+                    if (significantItem != null)
+                    {
+                        elementName = !string.IsNullOrEmpty(significantItem.DisplayName) ? 
+                            significantItem.DisplayName : "Unnamed Element";
+                    }
+                }
+                catch
+                {
+                    elementName = "Empty clash";
+                }
+
+                string groupName = initialName + elementName;
+                
+                ClashResultGroup existingGroup = clashResultGroups.FirstOrDefault(x => x.DisplayName == groupName);
+                if (existingGroup == null)
+                {
+                    ClashResultGroup newGroup = new ClashResultGroup();
+                    newGroup.DisplayName = groupName;
+                    newGroup.Children.Add(clashResult.CreateCopy());
+                    clashResultGroups.Add(newGroup);
+                }
+                else
+                {
+                    existingGroup.Children.Add(clashResult.CreateCopy());
+                }
+            }
+
+            return clashResultGroups.OrderBy(x => x.DisplayName).ToList();
+        }
+
+        /// <summary>
+        /// Groups clashes by unique combinations of both elements
+        /// </summary>
+        private static List<ClashResultGroup> GroupByLastUnique(List<ClashResult> results, string initialName)
+        {
+            List<ClashResultGroup> clashResultGroups = new List<ClashResultGroup>();
+
+            foreach (var clashResult in results)
+            {
+                string element1Name = "Unknown1";
+                string element2Name = "Unknown2";
+                
+                try
+                {
+                    ModelItem item1 = GetSignificantAncestorOrSelf(clashResult.CompositeItem1);
+                    ModelItem item2 = GetSignificantAncestorOrSelf(clashResult.CompositeItem2);
+                    
+                    element1Name = item1?.DisplayName ?? "Unknown1";
+                    element2Name = item2?.DisplayName ?? "Unknown2";
+                }
+                catch
+                {
+                    element1Name = "Unknown1";
+                    element2Name = "Unknown2";
+                }
+
+                // Create a unique combination name
+                string groupName = initialName + element1Name + " vs " + element2Name;
+                
+                ClashResultGroup existingGroup = clashResultGroups.FirstOrDefault(x => x.DisplayName == groupName);
+                if (existingGroup == null)
+                {
+                    ClashResultGroup newGroup = new ClashResultGroup();
+                    newGroup.DisplayName = groupName;
+                    newGroup.Children.Add(clashResult.CreateCopy());
+                    clashResultGroups.Add(newGroup);
+                }
+                else
+                {
+                    existingGroup.Children.Add(clashResult.CreateCopy());
+                }
+            }
+
+            return clashResultGroups.OrderBy(x => x.DisplayName).ToList();
+        }
+
+        #endregion
+
     }
 
     public enum GroupingMode
@@ -533,7 +812,17 @@ namespace GroupClashes
         [Description("Approved By")]
         ApprovedBy,
         [Description("Status")]
-        Status
+        Status,
+        [Description("File")]
+        File,
+        [Description("Layer")]
+        Layer,
+        [Description("First")]
+        First,
+        [Description("Last")]
+        Last,
+        [Description("Last Unique")]
+        LastUnique
     }
 
 }
