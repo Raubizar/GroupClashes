@@ -281,6 +281,7 @@
     </Compile>
     <Compile Include="GroupClashesPane.cs" />
     <Compile Include="GroupingFunctions.cs" />
+    <Compile Include="Logger.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

@@ -13,27 +13,56 @@ namespace GroupClashes
     {
         public static void GroupClashes(ClashTest selectedClashTest, GroupingMode groupingMode, GroupingMode subgroupingMode, bool keepExistingGroups)
         {
-            //Get existing clash result
-            List<ClashResult> clashResults = GetIndividualClashResults(selectedClashTest,keepExistingGroups).ToList();
-            List<ClashResultGroup> clashResultGroups = new List<ClashResultGroup>();
-
-            //Create groups according to the first grouping mode
-            CreateGroup(ref clashResultGroups, groupingMode, clashResults,"");
-
-            //Optionnaly, create subgroups
-            if (subgroupingMode != GroupingMode.None)
+            Logger.LogInfo($"Starting GroupClashes operation: Test='{selectedClashTest.DisplayName}', Mode={groupingMode}, SubMode={subgroupingMode}, KeepExisting={keepExistingGroups}");
+            
+            try
             {
-                CreateSubGroups(ref clashResultGroups, subgroupingMode);
+                using (Logger.MeasurePerformance($"GroupClashes - {selectedClashTest.DisplayName}"))
+                {
+                    //Get existing clash result
+                    List<ClashResult> clashResults = GetIndividualClashResults(selectedClashTest, keepExistingGroups).ToList();
+                    Logger.LogInfo($"Retrieved {clashResults.Count} individual clash results");
+                    
+                    List<ClashResultGroup> clashResultGroups = new List<ClashResultGroup>();
+
+                    //Create groups according to the first grouping mode
+                    Logger.LogInfo($"Creating primary groups using mode: {groupingMode}");
+                    CreateGroup(ref clashResultGroups, groupingMode, clashResults, "");
+                    Logger.LogInfo($"Created {clashResultGroups.Count} primary groups");
+
+                    //Optionally, create subgroups
+                    if (subgroupingMode != GroupingMode.None)
+                    {
+                        Logger.LogInfo($"Creating subgroups using mode: {subgroupingMode}");
+                        CreateSubGroups(ref clashResultGroups, subgroupingMode);
+                    }
+
+                    //Remove groups with only one clash
+                    Logger.LogInfo("Removing single-clash groups");
+                    List<ClashResult> ungroupedClashResults = RemoveOneClashGroup(ref clashResultGroups);
+                    Logger.LogInfo($"Removed single-clash groups, {ungroupedClashResults.Count} clashes remain ungrouped");
+
+                    //Backup the existing group, if necessary
+                    if (keepExistingGroups)
+                    {
+                        Logger.LogInfo("Backing up existing groups");
+                        var existingGroups = BackupExistingClashGroups(selectedClashTest).ToList();
+                        clashResultGroups.AddRange(existingGroups);
+                        Logger.LogInfo($"Added {existingGroups.Count} existing groups");
+                    }
+
+                    //Process these groups and clashes into the clash test
+                    Logger.LogInfo($"Processing final result: {clashResultGroups.Count} groups, {ungroupedClashResults.Count} ungrouped clashes");
+                    ProcessClashGroup(clashResultGroups, ungroupedClashResults, selectedClashTest);
+                    
+                    Logger.LogInfo("GroupClashes operation completed successfully");
+                }
             }
-
-            //Remove groups with only one clash
-            List<ClashResult> ungroupedClashResults = RemoveOneClashGroup(ref clashResultGroups);
-
-            //Backup the existing group, if necessary
-            if (keepExistingGroups) clashResultGroups.AddRange(BackupExistingClashGroups(selectedClashTest));
-
-            //Process these groups and clashes into the clash test
-            ProcessClashGroup(clashResultGroups, ungroupedClashResults, selectedClashTest);
+            catch (Exception ex)
+            {
+                Logger.LogError($"Error in GroupClashes for test '{selectedClashTest.DisplayName}'", ex);
+                throw;
+            }
         }
 
         private static void CreateGroup(ref List<ClashResultGroup> clashResultGroups, GroupingMode groupingMode, List<ClashResult> clashResults, string initialName)
@@ -398,35 +427,101 @@ namespace GroupClashes
         #region helpers
         private static void ProcessClashGroup(List<ClashResultGroup> clashGroups, List<ClashResult> ungroupedClashResults, ClashTest selectedClashTest)
         {
-            using (Transaction tx = Application.MainDocument.BeginTransaction("Group clashes"))
+            Logger.LogTransaction("Starting", "Group clashes", $"Groups: {clashGroups.Count}, Ungrouped: {ungroupedClashResults.Count}");
+            
+            Transaction tx = null;
+            Progress ProgressBar = null;
+            
+            try
             {
+                tx = Application.MainDocument.BeginTransaction("Group clashes");
+                Logger.LogTransaction("Created", "Group clashes");
+
                 ClashTest copiedClashTest = (ClashTest)selectedClashTest.CreateCopyWithoutChildren();
                 //When we replace theTest with our new test, theTest will be disposed. If the operation is cancelled, we need a non-disposed copy of theTest with children to sub back in.
                 ClashTest BackupTest = (ClashTest)selectedClashTest.CreateCopy();
+                Logger.LogInfo("Created backup clash test copies");
+                
                 DocumentClash documentClash = Application.MainDocument.GetClash();
                 int indexOfClashTest = documentClash.TestsData.Tests.IndexOf(selectedClashTest);
+                Logger.LogInfo($"Replacing clash test at index {indexOfClashTest}");
+                
                 documentClash.TestsData.TestsReplaceWithCopy(indexOfClashTest, copiedClashTest);
 
                 int CurrentProgress = 0;
                 int TotalProgress = ungroupedClashResults.Count + clashGroups.Count;
-                Progress ProgressBar = Application.BeginProgress("Copying Results", "Copying results from " + selectedClashTest.DisplayName + " to the Group Clashes pane...");
+                Logger.LogInfo($"Starting progress tracking: {TotalProgress} total items");
+                
+                ProgressBar = Application.BeginProgress("Copying Results", "Copying results from " + selectedClashTest.DisplayName + " to the Group Clashes pane...");
+
+                // Process groups
+                Logger.LogInfo($"Processing {clashGroups.Count} clash result groups");
                 foreach (ClashResultGroup clashResultGroup in clashGroups)
                 {
-                    if (ProgressBar.IsCanceled) break;
+                    if (ProgressBar.IsCanceled)
+                    {
+                        Logger.LogWarning("Operation cancelled by user during group processing");
+                        break;
+                    }
                     documentClash.TestsData.TestsAddCopy((GroupItem)documentClash.TestsData.Tests[indexOfClashTest], clashResultGroup);
                     CurrentProgress++;
                     ProgressBar.Update((double)CurrentProgress / TotalProgress);
                 }
+
+                // Process ungrouped results
+                Logger.LogInfo($"Processing {ungroupedClashResults.Count} ungrouped clash results");
                 foreach (ClashResult clashResult in ungroupedClashResults)
                 {
-                    if (ProgressBar.IsCanceled) break;
+                    if (ProgressBar.IsCanceled)
+                    {
+                        Logger.LogWarning("Operation cancelled by user during ungrouped processing");
+                        break;
+                    }
                     documentClash.TestsData.TestsAddCopy((GroupItem)documentClash.TestsData.Tests[indexOfClashTest], clashResult);
                     CurrentProgress++;
                     ProgressBar.Update((double)CurrentProgress / TotalProgress);
                 }
-                if (ProgressBar.IsCanceled) documentClash.TestsData.TestsReplaceWithCopy(indexOfClashTest, BackupTest);
+
+                if (ProgressBar.IsCanceled)
+                {
+                    Logger.LogWarning("Restoring backup due to cancellation");
+                    documentClash.TestsData.TestsReplaceWithCopy(indexOfClashTest, BackupTest);
+                }
+
                 tx.Commit();
-                Application.EndProgress();
+                Logger.LogTransaction("Committed", "Group clashes", "Successfully completed grouping operation");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Error in ProcessClashGroup", ex);
+                
+                if (tx != null)
+                {
+                    Logger.LogTransaction("Rolling back", "Group clashes", "Due to error");
+                    // Note: Navisworks Transaction doesn't have Rollback - disposal handles it
+                }
+                throw;
+            }
+            finally
+            {
+                try
+                {
+                    if (ProgressBar != null)
+                    {
+                        Application.EndProgress();
+                        Logger.LogInfo("Progress indicator disposed");
+                    }
+                    
+                    if (tx != null)
+                    {
+                        tx.Dispose();
+                        Logger.LogTransaction("Disposed", "Group clashes");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError("Error disposing resources in ProcessClashGroup", ex);
+                }
             }
         }
 

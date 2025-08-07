@@ -16,6 +16,8 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using System.Threading;
+using System.Windows.Threading;
 
 using Autodesk.Navisworks.Api.Clash;
 using Autodesk.Navisworks.Api;
@@ -32,162 +34,392 @@ namespace GroupClashes
         public ObservableCollection<GroupingMode> GroupThenList { get; set; }
         public ClashTest SelectedClashTest { get; set; }
 
+        private bool _isProcessing = false;
+        private readonly object _processLock = new object();
+
         public GroupClashesInterface()
         {
-            InitializeComponent();
+            Logger.Initialize();
+            Logger.LogInfo("GroupClashesInterface constructor called");
+            
+            using (Logger.MeasurePerformance("Interface Initialization"))
+            {
+                InitializeComponent();
 
-            ClashTests = new ObservableCollection<CustomClashTest>();
-            GroupByList = new ObservableCollection<GroupingMode>();
-            GroupThenList = new ObservableCollection<GroupingMode>();
+                ClashTests = new ObservableCollection<CustomClashTest>();
+                GroupByList = new ObservableCollection<GroupingMode>();
+                GroupThenList = new ObservableCollection<GroupingMode>();
 
-            RegisterChanges();
+                RegisterChanges();
 
-            this.DataContext = this;
+                this.DataContext = this;
+                
+                Logger.LogInfo("Interface initialization completed successfully");
+            }
         }
 
-        private void Group_Button_Click(object sender, WIN.RoutedEventArgs e)
+        private async void Group_Button_Click(object sender, WIN.RoutedEventArgs e)
         {
-            if (ClashTestListBox.SelectedItems.Count != 0)
-            {
-                //Unsubscribe temporarly
-                UnRegisterChanges();
+            Logger.LogUserAction("Group Button Clicked", $"Selected items: {ClashTestListBox.SelectedItems.Count}");
+            Logger.LogUIThread("Group_Button_Click", Dispatcher.CheckAccess());
 
+            // Prevent multiple simultaneous operations
+            lock (_processLock)
+            {
+                if (_isProcessing)
+                {
+                    Logger.LogWarning("Group operation already in progress, ignoring click");
+                    return;
+                }
+                _isProcessing = true;
+            }
+
+            try
+            {
+                if (ClashTestListBox.SelectedItems.Count == 0)
+                {
+                    Logger.LogWarning("No clash tests selected for grouping");
+                    return;
+                }
+
+                // Disable UI during processing
+                SetUIEnabled(false);
+                Logger.LogInfo("UI disabled for processing");
+
+                // Unsubscribe temporarily to avoid event conflicts
+                UnRegisterChanges();
+                Logger.LogInfo("Event handlers unregistered");
+
+                await Task.Run(() =>
+                {
+                    Logger.LogInfo("Starting grouping operation on background thread");
+                    
+                    using (Logger.MeasurePerformance("Total Grouping Operation"))
+                    {
+                        ProcessGroupingOperation();
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Error in Group_Button_Click", ex);
+                WIN.MessageBox.Show($"An error occurred during grouping: {ex.Message}", "GroupClashes Error", 
+                    WIN.MessageBoxButton.OK, WIN.MessageBoxImage.Error);
+            }
+            finally
+            {
+                // Re-enable UI and re-register events
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    SetUIEnabled(true);
+                    RegisterChanges();
+                    Logger.LogInfo("UI re-enabled and events re-registered");
+                    
+                    lock (_processLock)
+                    {
+                        _isProcessing = false;
+                    }
+                }));
+            }
+        }
+
+        private void ProcessGroupingOperation()
+        {
+            var selectedItems = new List<CustomClashTest>();
+            
+            // Capture selected items on UI thread
+            Dispatcher.Invoke(() =>
+            {
                 foreach (object selectedItem in ClashTestListBox.SelectedItems)
                 {
-                    CustomClashTest selectedClashTest = (CustomClashTest)selectedItem;
-                    ClashTest clashTest = selectedClashTest.ClashTest;
+                    selectedItems.Add((CustomClashTest)selectedItem);
+                }
+            });
 
-                    if (clashTest.Children.Count != 0)
+            Logger.LogInfo($"Processing {selectedItems.Count} clash tests");
+
+            foreach (var selectedClashTest in selectedItems)
+            {
+                try
+                {
+                    using (Logger.MeasurePerformance($"Grouping {selectedClashTest.ClashTest.DisplayName}"))
                     {
-                        //Some selection check
-                        if (comboBoxGroupBy.SelectedItem == null) comboBoxGroupBy.SelectedItem = GroupingMode.None;
-                        if (comboBoxThenBy.SelectedItem == null) comboBoxThenBy.SelectedItem = GroupingMode.None;
+                        ClashTest clashTest = selectedClashTest.ClashTest;
 
-                        if ((GroupingMode)comboBoxThenBy.SelectedItem != GroupingMode.None
-                            || (GroupingMode)comboBoxGroupBy.SelectedItem != GroupingMode.None)
+                        if (clashTest.Children.Count == 0)
                         {
+                            Logger.LogWarning($"Clash test '{clashTest.DisplayName}' has no children to group");
+                            continue;
+                        }
 
-                            if ((GroupingMode)comboBoxThenBy.SelectedItem == GroupingMode.None
-                                && (GroupingMode)comboBoxGroupBy.SelectedItem != GroupingMode.None)
+                        GroupingMode groupBy = GroupingMode.None;
+                        GroupingMode thenBy = GroupingMode.None;
+                        bool keepExisting = false;
+
+                        // Get UI values on UI thread
+                        Dispatcher.Invoke(() =>
+                        {
+                            groupBy = (GroupingMode)(comboBoxGroupBy.SelectedItem ?? GroupingMode.None);
+                            thenBy = (GroupingMode)(comboBoxThenBy.SelectedItem ?? GroupingMode.None);
+                            keepExisting = (bool)(keepExistingGroupsCheckBox.IsChecked ?? false);
+                        });
+
+                        Logger.LogUserAction("Grouping Configuration", 
+                            $"GroupBy: {groupBy}, ThenBy: {thenBy}, KeepExisting: {keepExisting}");
+
+                        if (thenBy != GroupingMode.None || groupBy != GroupingMode.None)
+                        {
+                            if (thenBy == GroupingMode.None && groupBy != GroupingMode.None)
                             {
-                                GroupingMode mode = (GroupingMode)comboBoxGroupBy.SelectedItem;
-                                GroupingFunctions.GroupClashes(clashTest, mode, GroupingMode.None, (bool)keepExistingGroupsCheckBox.IsChecked);
+                                Logger.LogInfo($"Single grouping mode: {groupBy}");
+                                GroupingFunctions.GroupClashes(clashTest, groupBy, GroupingMode.None, keepExisting);
                             }
-                            else if ((GroupingMode)comboBoxGroupBy.SelectedItem == GroupingMode.None
-                                && (GroupingMode)comboBoxThenBy.SelectedItem != GroupingMode.None)
+                            else if (groupBy == GroupingMode.None && thenBy != GroupingMode.None)
                             {
-                                GroupingMode mode = (GroupingMode)comboBoxThenBy.SelectedItem;
-                                GroupingFunctions.GroupClashes(clashTest, mode, GroupingMode.None, (bool)keepExistingGroupsCheckBox.IsChecked);
+                                Logger.LogInfo($"Single grouping mode (then by): {thenBy}");
+                                GroupingFunctions.GroupClashes(clashTest, thenBy, GroupingMode.None, keepExisting);
                             }
                             else
                             {
-                                GroupingMode byMode = (GroupingMode)comboBoxGroupBy.SelectedItem;
-                                GroupingMode thenByMode = (GroupingMode)comboBoxThenBy.SelectedItem;
-                                GroupingFunctions.GroupClashes(clashTest, byMode, thenByMode, (bool)keepExistingGroupsCheckBox.IsChecked);
+                                Logger.LogInfo($"Hierarchical grouping: {groupBy} then {thenBy}");
+                                GroupingFunctions.GroupClashes(clashTest, groupBy, thenBy, keepExisting);
                             }
+                            
+                            Logger.LogInfo($"Successfully grouped clash test: {clashTest.DisplayName}");
                         }
-
+                        else
+                        {
+                            Logger.LogWarning("No grouping mode selected");
+                        }
                     }
                 }
-
-                //Resubscribe
-                RegisterChanges();
+                catch (Exception ex)
+                {
+                    Logger.LogError($"Error processing clash test '{selectedClashTest.ClashTest.DisplayName}'", ex);
+                }
             }
-
         }
 
-        private void Ungroup_Button_Click(object sender, WIN.RoutedEventArgs e)
+        private void SetUIEnabled(bool enabled)
         {
-            if (ClashTestListBox.SelectedItems.Count != 0)
+            Group_Button.IsEnabled = enabled;
+            Ungroup_Button.IsEnabled = enabled;
+            comboBoxGroupBy.IsEnabled = enabled;
+            comboBoxThenBy.IsEnabled = enabled;
+            ClashTestListBox.IsEnabled = enabled;
+            keepExistingGroupsCheckBox.IsEnabled = enabled;
+            
+            Logger.LogInfo($"UI controls {(enabled ? "enabled" : "disabled")}");
+        }
+
+        private async void Ungroup_Button_Click(object sender, WIN.RoutedEventArgs e)
+        {
+            Logger.LogUserAction("Ungroup Button Clicked", $"Selected items: {ClashTestListBox.SelectedItems.Count}");
+            
+            // Prevent multiple simultaneous operations
+            lock (_processLock)
             {
-                //Unsubscribe temporarly
-                UnRegisterChanges();
-
-                foreach (object selectedItem in ClashTestListBox.SelectedItems)
+                if (_isProcessing)
                 {
-                    CustomClashTest selectedClashTest = (CustomClashTest)selectedItem;
-                    ClashTest clashTest = selectedClashTest.ClashTest;
+                    Logger.LogWarning("Ungroup operation already in progress, ignoring click");
+                    return;
+                }
+                _isProcessing = true;
+            }
 
-                    if (clashTest.Children.Count != 0)
-                    {
-                        GroupingFunctions.UnGroupClashes(clashTest);
-                    }
+            try
+            {
+                if (ClashTestListBox.SelectedItems.Count == 0)
+                {
+                    Logger.LogWarning("No clash tests selected for ungrouping");
+                    return;
                 }
 
-                //Resubscribe
-                RegisterChanges();
+                SetUIEnabled(false);
+                UnRegisterChanges();
 
+                await Task.Run(() =>
+                {
+                    Logger.LogInfo("Starting ungrouping operation on background thread");
+                    
+                    using (Logger.MeasurePerformance("Total Ungrouping Operation"))
+                    {
+                        ProcessUngroupingOperation();
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Error in Ungroup_Button_Click", ex);
+                WIN.MessageBox.Show($"An error occurred during ungrouping: {ex.Message}", "GroupClashes Error", 
+                    WIN.MessageBoxButton.OK, WIN.MessageBoxImage.Error);
+            }
+            finally
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    SetUIEnabled(true);
+                    RegisterChanges();
+                    
+                    lock (_processLock)
+                    {
+                        _isProcessing = false;
+                    }
+                }));
+            }
+        }
+
+        private void ProcessUngroupingOperation()
+        {
+            var selectedItems = new List<CustomClashTest>();
+            
+            Dispatcher.Invoke(() =>
+            {
+                foreach (object selectedItem in ClashTestListBox.SelectedItems)
+                {
+                    selectedItems.Add((CustomClashTest)selectedItem);
+                }
+            });
+
+            foreach (var selectedClashTest in selectedItems)
+            {
+                try
+                {
+                    using (Logger.MeasurePerformance($"Ungrouping {selectedClashTest.ClashTest.DisplayName}"))
+                    {
+                        ClashTest clashTest = selectedClashTest.ClashTest;
+
+                        if (clashTest.Children.Count == 0)
+                        {
+                            Logger.LogWarning($"Clash test '{clashTest.DisplayName}' has no children to ungroup");
+                            continue;
+                        }
+
+                        GroupingFunctions.UnGroupClashes(clashTest);
+                        Logger.LogInfo($"Successfully ungrouped clash test: {clashTest.DisplayName}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError($"Error ungrouping clash test '{selectedClashTest.ClashTest.DisplayName}'", ex);
+                }
             }
         }
 
         private void RegisterChanges()
         {
-            //When the document change
-            Application.MainDocument.Database.Changed += DocumentClashTests_Changed;
+            try
+            {
+                Logger.LogInfo("Registering change event handlers");
+                
+                //When the document change
+                Application.MainDocument.Database.Changed += DocumentClashTests_Changed;
 
-            //When a clash test change
-            DocumentClashTests dct = Application.MainDocument.GetClash().TestsData;
-            //Register
-            dct.Changed += DocumentClashTests_Changed;
+                //When a clash test change
+                DocumentClashTests dct = Application.MainDocument.GetClash().TestsData;
+                //Register
+                dct.Changed += DocumentClashTests_Changed;
 
-            //Get all clash tests and check up to date
-            GetClashTests();
-            CheckPlugin();
-            LoadComboBox();
+                //Get all clash tests and check up to date
+                GetClashTests();
+                CheckPlugin();
+                LoadComboBox();
+                
+                Logger.LogInfo("Event handlers registered successfully");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Error registering change handlers", ex);
+            }
         }
 
         private void UnRegisterChanges()
         {
-            //When the document change
-            Application.MainDocument.Database.Changed -= DocumentClashTests_Changed;
+            try
+            {
+                Logger.LogInfo("Unregistering change event handlers");
+                
+                //When the document change
+                Application.MainDocument.Database.Changed -= DocumentClashTests_Changed;
 
-            //When a clash test change
-            DocumentClashTests dct = Application.MainDocument.GetClash().TestsData;
-            //Register
-            dct.Changed -= DocumentClashTests_Changed;
+                //When a clash test change
+                DocumentClashTests dct = Application.MainDocument.GetClash().TestsData;
+                //Register
+                dct.Changed -= DocumentClashTests_Changed;
+                
+                Logger.LogInfo("Event handlers unregistered successfully");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Error unregistering change handlers", ex);
+            }
         }
 
         void DocumentClashTests_Changed(object sender, EventArgs e)
         {
-            GetClashTests();
-            CheckPlugin();
-            LoadComboBox();
-
+            try
+            {
+                Logger.LogInfo("Document clash tests changed event received");
+                Logger.LogUIThread("DocumentClashTests_Changed", Dispatcher.CheckAccess());
+                
+                GetClashTests();
+                CheckPlugin();
+                LoadComboBox();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Error handling document change event", ex);
+            }
         }
 
         private void GetClashTests()
         {
-            DocumentClashTests dct = Application.MainDocument.GetClash().TestsData;
-            ClashTests.Clear();
-
-            foreach (SavedItem savedItem in dct.Tests)
+            try
             {
-                if (savedItem.GetType() == typeof(ClashTest))
+                using (Logger.MeasurePerformance("GetClashTests"))
                 {
-                    ClashTests.Add(new CustomClashTest(savedItem as ClashTest));
+                    DocumentClashTests dct = Application.MainDocument.GetClash().TestsData;
+                    ClashTests.Clear();
+
+                    int testCount = 0;
+                    foreach (SavedItem savedItem in dct.Tests)
+                    {
+                        if (savedItem.GetType() == typeof(ClashTest))
+                        {
+                            ClashTests.Add(new CustomClashTest(savedItem as ClashTest));
+                            testCount++;
+                        }
+                    }
+                    
+                    Logger.LogInfo($"Loaded {testCount} clash tests");
                 }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Error getting clash tests", ex);
             }
         }
 
         private void CheckPlugin()
         {
-            //Inactive if there is no document open or there are no clash tests
-            if (Application.MainDocument == null
-                || Application.MainDocument.IsClear
-                || Application.MainDocument.GetClash() == null
-                || Application.MainDocument.GetClash().TestsData.Tests.Count == 0)
+            try
             {
-                Group_Button.IsEnabled = false;
-                comboBoxGroupBy.IsEnabled = false;
-                comboBoxThenBy.IsEnabled = false;
-                Ungroup_Button.IsEnabled = false;
+                //Inactive if there is no document open or there are no clash tests
+                bool shouldEnable = !(Application.MainDocument == null
+                    || Application.MainDocument.IsClear
+                    || Application.MainDocument.GetClash() == null
+                    || Application.MainDocument.GetClash().TestsData.Tests.Count == 0);
+
+                Group_Button.IsEnabled = shouldEnable;
+                comboBoxGroupBy.IsEnabled = shouldEnable;
+                comboBoxThenBy.IsEnabled = shouldEnable;
+                Ungroup_Button.IsEnabled = shouldEnable;
+                
+                Logger.LogInfo($"Plugin UI state: {(shouldEnable ? "enabled" : "disabled")}");
             }
-            else
+            catch (Exception ex)
             {
-                Group_Button.IsEnabled = true;
-                comboBoxGroupBy.IsEnabled = true;
-                comboBoxThenBy.IsEnabled = true;
-                Ungroup_Button.IsEnabled = true;
+                Logger.LogError("Error checking plugin state", ex);
             }
         }
 

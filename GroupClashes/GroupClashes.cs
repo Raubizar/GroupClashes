@@ -23,37 +23,64 @@ namespace GroupClashes
     {
         public RibbonHandler()
         {
-            // Constructor - no initialization needed
+            Logger.Initialize();
+            Logger.LogInfo("RibbonHandler constructor called");
         }
 
         public override int ExecuteCommand(string commandId, params string[] parameters)
         {
-            if (Autodesk.Navisworks.Api.Application.IsAutomated)
+            Logger.LogUserAction("Ribbon Command Executed", $"CommandId: {commandId}");
+            
+            try
             {
-                throw new InvalidOperationException("Invalid when running using Automation");
-            }
-
-            //Find the plugin
-            PluginRecord pr = Autodesk.Navisworks.Api.Application.Plugins.FindPlugin("GroupClashes.GroupClashesPane.BM42");
-
-            if (pr != null && pr is DockPanePluginRecord && pr.IsEnabled)
-            {
-                //check if it needs loading
-                if (pr.LoadedPlugin == null)
+                if (Autodesk.Navisworks.Api.Application.IsAutomated)
                 {
-                    pr.LoadPlugin();
+                    Logger.LogWarning("Attempted to run in automation mode");
+                    throw new InvalidOperationException("Invalid when running using Automation");
                 }
 
-                DockPanePlugin dpp = pr.LoadedPlugin as DockPanePlugin;
-                if (dpp != null)
-                {
-                    //switch the Visible flag
-                    dpp.Visible = !dpp.Visible;
-                }
-            }
+                Logger.LogInfo("Looking for GroupClashes plugin");
+                
+                //Find the plugin
+                PluginRecord pr = Autodesk.Navisworks.Api.Application.Plugins.FindPlugin("GroupClashes.GroupClashesPane.BM42");
 
-            //groupClashesInterface.ShowDialog();
-            return 0;
+                if (pr != null && pr is DockPanePluginRecord && pr.IsEnabled)
+                {
+                    Logger.LogInfo($"Plugin found: Enabled={pr.IsEnabled}, Loaded={pr.LoadedPlugin != null}");
+                    
+                    //check if it needs loading
+                    if (pr.LoadedPlugin == null)
+                    {
+                        Logger.LogInfo("Loading plugin for first time");
+                        pr.LoadPlugin();
+                    }
+
+                    DockPanePlugin dpp = pr.LoadedPlugin as DockPanePlugin;
+                    if (dpp != null)
+                    {
+                        Logger.LogInfo($"Toggling plugin visibility: Current={dpp.Visible}");
+                        //switch the Visible flag
+                        dpp.Visible = !dpp.Visible;
+                        Logger.LogInfo($"Plugin visibility changed to: {dpp.Visible}");
+                    }
+                    else
+                    {
+                        Logger.LogError("Failed to cast loaded plugin to DockPanePlugin");
+                    }
+                }
+                else
+                {
+                    Logger.LogError($"Plugin not found or not enabled: Found={pr != null}, Enabled={pr?.IsEnabled}");
+                }
+
+                Logger.LogInfo("Command execution completed successfully");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Error executing ribbon command", ex);
+                throw;
+            }
         }
 
         public override CommandState CanExecuteCommand(String commandId)

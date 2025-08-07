@@ -14,20 +14,42 @@ namespace GroupClashes
     {
         public override Control CreateControlPane()
         {
-            //create the control that will be used to display in the pane
-            GroupClashesHostingControl control = new GroupClashesHostingControl();
+            Logger.LogInfo("Creating control pane for GroupClashes");
+            
+            try
+            {
+                //create the control that will be used to display in the pane
+                GroupClashesHostingControl control = new GroupClashesHostingControl();
 
-            control.Dock = DockStyle.Fill;
+                control.Dock = DockStyle.Fill;
 
-            //create the control
-            control.CreateControl();
-
-            return control;
+                //create the control
+                control.CreateControl();
+                
+                Logger.LogInfo("Control pane created successfully");
+                return control;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Error creating control pane", ex);
+                throw;
+            }
         }
 
         public override void DestroyControlPane(Control pane)
         {
-            pane.Dispose();
+            Logger.LogInfo("Destroying control pane for GroupClashes");
+            
+            try
+            {
+                pane.Dispose();
+                Logger.LogSessionEnd();
+                Logger.LogInfo("Control pane disposed successfully");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Error disposing control pane", ex);
+            }
         }
     }
 }

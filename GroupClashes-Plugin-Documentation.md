@@ -6,10 +6,11 @@ The GroupClashes plugin is a Navisworks add-in that automatically organizes and 
 ## Plugin Information
 - **Name**: Group Clashes
 - **Developer**: BIM 42 (Simon Moreau)
-- **Version**: 1.1.4
+- **Version**: 1.2.0
 - **Compatible with**: Navisworks 2019-2025
 - **Framework**: .NET Framework 4.8
 - **Assembly**: GroupClashes.BM42.dll
+- **Assembly Size**: ~58KB (includes comprehensive logging system)
 
 ## High-Level Workflow
 
@@ -246,6 +247,9 @@ When using the **"Then by"** option, the plugin creates nested group structures:
 - **Transaction-based operations**: Uses Navisworks transactions for safe, undoable operations
 - **Efficient copying**: Creates copies of clash results rather than moving originals to prevent data loss
 - **Memory management**: Proper disposal of temporary objects and progress indicators
+- **Thread-safe operations**: Background processing prevents UI freezing during large operations
+- **Multiple-click prevention**: Built-in locking mechanism prevents conflicting operations
+- **Comprehensive logging**: Automatic performance monitoring and issue detection
 
 ## Technical Implementation Details
 
@@ -266,6 +270,14 @@ Final step that applies the grouped structure back to the Navisworks clash test 
 - `BackupExistingClashGroups()`: Preserves existing groups when the option is enabled
 - `GetSignificantAncestorOrSelf()`: Finds meaningful parent elements for selection-based grouping
 - `GetFileAncestor()`: Traces elements back to their source model files
+
+### Logging and Monitoring Functions
+- `Logger.Initialize()`: Sets up comprehensive logging system with session tracking
+- `Logger.LogUserAction()`: Records user interactions for workflow analysis
+- `Logger.LogPerformance()`: Tracks operation timing and performance metrics
+- `Logger.LogTransaction()`: Monitors Navisworks transaction lifecycle
+- `Logger.LogError()`: Captures detailed error information with stack traces
+- `Logger.MeasurePerformance()`: Automatic timing scope for performance analysis
 
 ## Use Cases and Benefits
 
@@ -357,12 +369,16 @@ The plugin supports multiple Navisworks versions through conditional compilation
 - **Autodesk.Navisworks.Clash.dll**: Clash detection functionality
 - **System.Windows.Forms**: UI components
 - **PresentationFramework**: WPF interface elements
+- **System.Threading.Tasks**: Asynchronous operation support
+- **System.IO**: File system operations for logging
 
 ### Plugin Architecture
 - **CommandHandlerPlugin**: Main plugin entry point with ribbon integration
 - **DockPanePlugin**: Dockable panel interface
 - **UserControl**: WPF-based user interface
 - **Transaction-based operations**: Safe, undoable modifications to Navisworks data
+- **Thread-safe design**: Background processing with UI thread safety
+- **Comprehensive logging**: Automatic issue detection and performance monitoring
 
 ## Troubleshooting
 
@@ -371,11 +387,114 @@ The plugin supports multiple Navisworks versions through conditional compilation
 2. **Plugin not loading**: Verify correct .NET Framework version and Navisworks API references
 3. **Grouping fails**: Check that clash test contains clash results and is not empty
 4. **Performance issues**: For large clash tests (>1000 clashes), consider grouping in smaller batches
+5. **Multiple clicks not working**: Plugin now prevents multiple simultaneous operations - check logs for details
+6. **UI freezing**: Operations now run on background threads - ensure Navisworks isn't in automation mode
+
+### Comprehensive Logging System
+
+#### Log File Location
+**Default Path**: `%APPDATA%\GroupClashes\Logs\GroupClashes_YYYYMMDD.log`
+
+**Example Path**: `C:\Users\[Username]\AppData\Roaming\GroupClashes\Logs\GroupClashes_20250807.log`
+
+#### Log Categories and Examples
+
+**Session Tracking**:
+```
+=== GroupClashes Plugin Session Started ===
+Date: 2025-08-07 17:45:06
+Navisworks Version: 2025.1.0.0
+Plugin Version: 1.2.0
+Thread ID: 1
+Process ID: 12345
+```
+
+**User Action Logging**:
+```
+17:45:06.123 [ACTION] Group Button Clicked | Details: Selected items: 2
+17:45:06.125 [ACTION] Grouping Configuration | GroupBy: Level, ThenBy: None, KeepExisting: true
+17:45:06.127 [ACTION] Ribbon Command Executed | CommandId: ID_GroupClashesButton
+```
+
+**Performance Monitoring**:
+```
+17:45:06.130 [PERF] GroupClashes - MEP_Test completed in 245.67ms | Details: 45 clashes processed
+17:45:06.135 [PERF] Total Grouping Operation completed in 1247.89ms
+17:45:06.140 [PERF] Interface Initialization completed in 23.45ms
+```
+
+**Transaction Tracking**:
+```
+17:45:06.145 [TXN] Starting - 'Group clashes' | Groups: 5, Ungrouped: 12
+17:45:06.150 [TXN] Created - 'Group clashes'
+17:45:06.165 [TXN] Committed - 'Group clashes' | Successfully completed grouping operation
+17:45:06.167 [TXN] Disposed - 'Group clashes'
+```
+
+**Error Detection**:
+```
+17:45:06.170 [ERROR] Error in ProcessClashGroup | Exception: NullReferenceException - Object reference not set to an instance of an object | Stack: at GroupClashes.GroupingFunctions.ProcessClashGroup...
+17:45:06.172 [WARN] Group operation already in progress, ignoring click
+17:45:06.175 [ERROR] Transaction failed: Object reference not set... | GroupingFunctions.ProcessClashGroup(127)
+```
+
+**Threading Information**:
+```
+17:45:06.180 [UI] Group_Button_Click | IsUIThread: True | ThreadID: 1
+17:45:06.182 [UI] DocumentClashTests_Changed | IsUIThread: False | ThreadID: 5
+```
+
+#### Using Logs for Troubleshooting
+
+**1. Multiple Click Issues**:
+Look for: `[WARN] Group operation already in progress, ignoring click`
+- **Cause**: User clicking too rapidly
+- **Solution**: Wait for current operation to complete
+
+**2. Performance Problems**:
+Look for: `[PERF]` entries with high millisecond values
+- **Normal**: < 500ms for small clash tests
+- **Slow**: > 2000ms indicates performance issues
+- **Solution**: Process smaller batches or check system resources
+
+**3. Transaction Failures**:
+Look for: `[TXN] Rolling back` or `[ERROR]` with transaction context
+- **Cause**: Navisworks state conflicts or memory issues
+- **Solution**: Restart Navisworks or check document state
+
+**4. Threading Issues**:
+Look for: `[UI]` entries with `IsUIThread: False` during UI operations
+- **Cause**: Cross-thread operation attempts
+- **Solution**: Check plugin version compatibility
 
 ### Debug Information
-- Plugin uses debug output for troubleshooting (`System.Diagnostics.Debug.WriteLine`)
-- Progress indicators provide status during long operations
-- Transaction system ensures operations can be undone if issues occur
+- **Comprehensive logging**: Automatic session tracking, performance monitoring, and error detection
+- **Log file rotation**: Daily log files prevent excessive file sizes
+- **Debug output**: Development builds include console output via `System.Diagnostics.Debug.WriteLine`
+- **Progress indicators**: Visual feedback during long operations with cancellation support
+- **Transaction system**: Ensures operations can be undone if issues occur
+- **Thread safety**: Operations are thread-safe with proper UI synchronization
+
+### Advanced Troubleshooting
+
+#### Performance Analysis
+Use log files to identify bottlenecks:
+```bash
+# Search for slow operations (Windows Command Prompt)
+findstr /C:"PERF" %APPDATA%\GroupClashes\Logs\GroupClashes_*.log | findstr /V /C:"ms"
+```
+
+#### Error Pattern Detection
+```bash
+# Find all errors in today's log
+findstr /C:"ERROR" %APPDATA%\GroupClashes\Logs\GroupClashes_%DATE:~-4,4%%DATE:~-10,2%%DATE:~-7,2%.log
+```
+
+#### Transaction Monitoring
+```bash
+# Monitor transaction lifecycle
+findstr /C:"TXN" %APPDATA%\GroupClashes\Logs\GroupClashes_*.log
+```
 
 ---
 
